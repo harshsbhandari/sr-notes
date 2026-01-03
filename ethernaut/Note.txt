@@ -1,0 +1,272 @@
+✅ 0️⃣ Before Anything: How to Think Like an Auditor
+
+When approaching any contract, always ask:
+
+🔎 1. What controls value?
+
+ETH balances
+
+Token balances
+
+Ownership
+
+Prizes
+
+NFT rights
+
+Administrative privileges
+
+🔎 2. What controls access?
+
+owner
+
+onlyOwner
+
+tx.origin
+
+delegatecall
+
+fallback logic
+
+proxy relationships
+
+🔎 3. What state changes come before external calls?
+
+This is where bugs hide:
+
+reentrancy
+
+unsafe delegatecall
+
+logic before state updates
+
+race conditions
+
+DoS possibilities
+
+🔎 4. What assumptions does the contract incorrectly trust?
+
+predictable randomness
+
+honest user behavior
+
+ETH transfer success
+
+correct msg.sender identity
+
+storage secrecy
+
+external contract behavior
+
+⚙️ 1️⃣ Foundry Test Structure — Universal Boilerplate
+
+Every test file typically follows this structure:
+
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "forge-std/Test.sol";
+import "../src/Target.sol";
+
+contract TargetTest is Test {
+    Target public target;
+    address attacker = address(0xBEEF);
+    address deployer = address(1);
+
+    function setUp() public {
+        vm.deal(attacker, 10 ether);
+        vm.deal(deployer, 10 ether);
+
+        vm.startPrank(deployer);
+        target = new Target(); // or setup type constructor
+        vm.stopPrank();
+    }
+
+    function testAttack() public {
+        vm.startPrank(attacker);
+
+        // exploit here
+
+        vm.stopPrank();
+    }
+}
+
+🧪 2️⃣ Foundry Testing Superpowers (VM Cheats)
+
+Memorize these — you’ll use them constantly.
+
+👤 Identity Control
+vm.startPrank(attacker);
+vm.stopPrank();
+
+vm.prank(attacker); // for single call
+
+💰 Funding Accounts
+vm.deal(attacker, 10 ether);
+
+⏳ Time / Blocks
+vm.roll(blockNumber);
+vm.warp(timestamp);
+
+🧱 ETH sending
+(bool success,) = address(target).call{value: 1 ether}("");
+require(success);
+
+🧨 Expect Reverts
+vm.expectRevert();
+target.functionThatShouldFail();
+
+📦 Storage Reading
+bytes32 slot = vm.load(address(target), bytes32(uint256(1)));
+
+
+Critical in puzzles like Vault.
+
+🏗️ 3️⃣ Constructors & Deployment Scenarios
+
+Understanding constructor patterns is key.
+
+1️⃣ Simple Constructor
+contract A {
+    address public owner;
+    constructor() {
+        owner = msg.sender;
+    }
+}
+
+
+Test:
+
+vm.prank(attacker);
+A a = new A();
+
+2️⃣ With Parameters
+contract B {
+    address public owner;
+    constructor(address _owner) {
+        owner = _owner;
+    }
+}
+
+
+Test:
+
+B b = new B(attacker);
+
+3️⃣ Payable Constructor
+contract C {
+    uint public prize;
+    constructor() payable {
+        prize = msg.value;
+    }
+}
+
+
+Test:
+
+C c = new C{value: 1 ether}();
+
+4️⃣ Deploying Attack Contracts
+
+Common in Ethernaut–style problems
+
+Attack exploit = new Attack(address(target));
+exploit.attack();
+
+
+Sometimes with value:
+
+new Attack{value: 1 ether}(address(target));
+
+🔐 4️⃣ Ownership & Access Control Attack Concepts
+📌 tx.origin Weakness
+
+Attack requires intermediate contract
+
+Caller contract = msg.sender
+
+Original EOA = tx.origin
+→ Use proxy attacker contract.
+
+📌 Delegatecall
+
+Key truths:
+
+Changes storage of caller
+
+Uses logic of implementation contract
+
+Storage layouts MUST match for intended design, but in exploits attackers abuse mismatch
+
+Exploit idea:
+Send function signature in msg.data to fallback
+
+(address(delegate)).delegatecall(abi.encodeWithSignature("pwn()"));
+
+
+Result:
+State of caller changes.
+
+💣 5️⃣ Reentrancy Attack Model
+
+Recognize this:
+
+(bool sent,) = msg.sender.call{value: _amount}("");
+balances[msg.sender] -= _amount;
+
+
+🔥 external call
+🔥 before state update
+
+Attack:
+1️⃣ donate to contract
+2️⃣ withdraw
+3️⃣ fallback calls withdraw again
+4️⃣ drain before balance updates
+
+Attack contract pattern:
+
+receive() external payable {
+    if (address(target).balance > 0) {
+        target.withdraw();
+    }
+}
+
+
+🧠 1️⃣2️⃣ Your Internal PoC Checklist
+
+When starting ANY exploit test ask:
+
+✔️ Setup Correct?
+
+funded attacker?
+
+correct deployer?
+
+constructor right?
+
+prank identities correct?
+
+✔️ Attack Path Clear?
+
+ownership pivot?
+
+reentrancy?
+
+fallback abuse?
+
+predictable randomness?
+
+delegatecall?
+
+✔️ Assertions After?
+
+Always assert impact:
+
+ownership changed
+
+balance drained
+
+contract locked
+
+variable modified
