@@ -11,6 +11,7 @@ contract CoinFlipTest is Test {
      * uint256 coinFlip = blockValue / FACTOR;
      * blockhash(block.number - 1) is deterministic in Foundry and even predictable on-chain short‑term
      * dividing by FACTOR makes result always 0 or 1
+     * 'blockhash' of previous block 'block.number-1' is known to us, so it is predictable
      */
 
     /*
