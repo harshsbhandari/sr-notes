@@ -96,6 +96,7 @@
 ```
 
 --
+
 https://rareskills.io/post/evm-solidity-storage-layout
 # Types of Storage
 
@@ -254,3 +255,9 @@ sstore(slot, value) overwrites the entire storage slot with a new value.
     }
 ```
 - **sstore() also does not type check.**
+
+## Manipulating storage packed variables in Yul Part 2
+
+- sstore and sload **operate on lengths of 32 bytes.** This is **convenient when dealing with uint256 type as the entire 32 bytes read or written correspond directly to the uint256 variable.**
+- The situation becomes more **complex when dealing with variables that are packed within the same storage slot.**
+- **Their byte sequence occupies only a portion of the 32 bytes and in assembly, we do not have an opcode to directly modify or read from their byte sequence in storage.**
