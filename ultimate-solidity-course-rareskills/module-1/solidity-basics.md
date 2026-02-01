@@ -25,30 +25,63 @@
 - Arrays & strings behave differently from the other Solidity datatypes.
 - eg - 
 ```solidity
-contract ExampleContract {
-    function useArrayForUint256(uint256[] calldata input)
-        public
-        pure
-        returns (uint256[] memory) {
-            return input;
+    contract ExampleContract {
+        function useArrayForUint256(uint256[] calldata input)
+            public
+            pure
+            returns (uint256[] memory) {
+                return input;
+        }
     }
-}
 ```
 - To get the **length of an array, use .length.**
 - Arrays can be declared to have a fixed length
 - eg -
 ```solidity
-contract ExampleContract {
-    function productOfarray(uint256[5] calldata myArray)
-    public
-    pure
-    returns (uint256) {
-        uint256 last = myArray[4];
-        return last;
+    contract ExampleContract {
+        function productOfarray(uint256[5] calldata myArray)
+        public
+        pure
+        returns (uint256) {
+            uint256 last = myArray[4];
+            return last;
+        }
     }
-}
 ```
 - **If the function is passed an array of any size other than 5, it will revert.**
+- Solidity **does not have a way to remove an item in the middle of a list and reduce the length by one. The following code is valid, but it does not change the length of the list.**
+- eg - 
+```solidity
+    contract ExampleContract {
+    
+        uint256[] public myArray;
+    
+        function removeAt(uint256 index) public {
+            delete myArray[index];
+            // sets the value at 'index' to be zero
+    
+            // the following code is equivalent
+            // myArray[index] = 0;
+    
+            // myArray.length does not change in either circumstance
+        }
+    }
+```
+- **If you want to remove an item and also reduce the length, you must do a “pop and swap”.**
+- It removes the element at the index argument and swaps it with the last element in the array
+- eg - 
+```solidity
+    contract ExampleContract {
+    
+        uint256[] public myArray;
+    
+        function popAndSwap(uint256 index) public {
+            uint256 valueAtTheEnd = myArray[myArray.length - 1];
+            myArray.pop(); // reduces the length;
+            myArray[index] = valueAtTheEnd;
+        }
+    }
+```
 
 ## String
 
@@ -71,6 +104,34 @@ contract ExampleContract {
 ```
 - **Declaring arrays and strings inside a function, as opposed to in the argument or return value, has a different syntax.**
 
+## Mapping
+
+- **If you access a mapping with a key that has not been set, you will NOT get a revert. The mapping will just return the “zero value” of the datatype for the value**
+- eg -
+```solidity
+    contract ExampleContract {
+    
+        mapping(uint256 => uint256) public myMapping;
+    
+        function setMapping(uint256 key, uint256 value)
+            public {
+                myMapping[key] = value;
+        }
+    
+        function getValue(uint256 key)
+            public
+            view
+            returns (uint256) {
+                return myMapping[key];
+        }
+    }
+```
+- **ERC20 tokens use mappings to store how many tokens someone has**! They map an address to how many tokens someone owns.
+- **ERC20 tokens are not stored in cryptocurrency wallets, they are simply a uint256 associated with your address in a smart contract. “ERC20 tokens” are simply a smart contract.**
+- **Surprise 1: Mappings can only be declared as storage, you cannot declare them inside a function**
+- **Surprise 2: Mappings cannot be iterated over**
+- **Surprise 3: Mappings cannot be returned**
+
 -- 
 
 ## What exactly is “forge” and “foundry” here?
@@ -86,10 +147,10 @@ contract ExampleContract {
 - If you try to divide 5 by 2, you won’t get 2.5. You’ll get 2. Remember, uint256 is an unsigned integer. So any division you do is integer division.
 - eg -
 ```solidity
-uint256 interest = 200 * 0.1; // fails, 0.1 is not valid
-
-// Equivalent for above code - 
-uint256 interest = 200 / 10;
+    uint256 interest = 200 * 0.1; // fails, 0.1 is not valid
+    
+    // Equivalent for above code - 
+    uint256 interest = 200 / 10;
 ```
 
 - Note: Why doesn’t Solidity support floats? **Floats are not always deterministic, and blockchains must be deterministic otherwise nodes won’t agree on the outcomes of transactions.** For example, if you divide 2/3, some computers will return 0.6666, and others 0.66667. This disagreement could cause the blockchain network to split up! Therefore, Solidity does not allow floats.
@@ -97,13 +158,13 @@ uint256 interest = 200 / 10;
 - **Solidity does not underflow or overflow, it stops the execution**
 - eg -
 ```solidity
-function subtract(uint256 x, uint256 y)
-        public
-        pure
-        returns (uint256) {
-            uint256 difference = x - y;
-            return difference;
-}
+    function subtract(uint256 x, uint256 y)
+            public
+            pure
+            returns (uint256) {
+                uint256 difference = x - y;
+                return difference;
+    }
 ```
 - What happens if x is 2 and y is 5? You won’t get negative 3. **Actually, what happens is the execution will halt with a revert.**
 - **Solidity doesn’t throw exceptions**, but you can think of a revert as the equivalent of an uncaught exception or a panic in other languages.
@@ -111,12 +172,12 @@ function subtract(uint256 x, uint256 y)
 - **If you want to allow underflow and overflow, you need to use an unchecked block**
 - eg - 
 ```solidity
-uint256 x = 1;
-uint256 y = 2;
-
-unchecked {
-    uint256 z = x - y; // z == 2**256 - 1
-}
+    uint256 x = 1;
+    uint256 y = 2;
+    
+    unchecked {
+        uint256 z = x - y; // z == 2**256 - 1
+    }
 ```
 - Note that **anything inside the unchecked block will not revert even if it overflows or underflows.**
 
@@ -135,3 +196,57 @@ unchecked {
 - Calldata means **“refer to the data in the Ethereum transaction itself.”**
 - When in doubt: **the function arguments for arrays and strings should be calldata and the function arguments for the return type should be memory.**
 - There are **some exceptions to using calldata in a function argument**, but the **return type for an array should always be memory, never calldata, or the code won’t compile.** 
+
+--
+
+## State variables
+
+- **Pure functions cannot access storage variables**
+- **Pure functions are not aware of the blockchain state or anything that has happened in the past.**
+- **Storage variable - These look like “class variables” in other languages, but don’t really behave like them. Think of them as variables that behave like a miniature database.**
+- 'View' - it **views the blockchain state, think of view as read-only**
+- Internal - **This means other smart contracts cannot see the value. Just because a variable is internal does not mean it is hidden. It’s still stored on the blockchain and anyone can parse the blockchain to get the value!**
+- eg - 
+```solidity
+    contract ExampleContract {
+    
+        uint256 internal x;
+    
+        function setX(
+            uint256 newValue
+        )
+        public {
+                x = newValue;
+        }
+    
+        // error: this function cannot be pure
+        function getX()
+            public
+            pure
+            returns (uint256) {
+                return x;
+        }
+    }
+```
+- **When a variable is declared public, it means other smart contracts can read the value but not modify it, as public variables cannot be modified unless there is a function to change their value.**
+- eg - 
+```solidity
+    contract ExampleContract {
+        uint256 public x;
+    
+        function getX()
+        public
+        view
+        returns (uint256) {
+            return x;
+        }
+        // No one can change the value of 'x', because it is public
+        // There has to be a setter function available too
+    }
+```
+- **Public functions that do not have a view or pure modifier can change storage variables**
+
+## msg.sender and address(this)
+
+- Solidity has a mechanism to identify **who is calling the smart contract: msg.sender. msg.sender returns the address of who is invoking the smart contract function.**
+- **address(this) - A smart contract its own address**
