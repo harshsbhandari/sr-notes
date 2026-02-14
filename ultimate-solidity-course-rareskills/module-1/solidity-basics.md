@@ -250,3 +250,373 @@ contract ExampleContract {
 
 - Solidity has a mechanism to identify **who is calling the smart contract: msg.sender. msg.sender returns the address of who is invoking the smart contract function.**
 - **address(this) - A smart contract its own address**
+
+-- 
+
+## constructor
+
+- Smart contracts have a special function that is called at deployment time called the constructor. This is pretty similar to other object-oriented programming languages. Here is what it looks like
+- eg -
+```solidity
+    contract ExampleContract {
+
+        address public banker;
+    
+        constructor() {
+            deployer = msg.sender;
+        }
+    }
+//  or
+    contract ExampleContract {
+    
+        address public banker;
+    
+        constructor(address _banker) {
+            banker = _banker;
+        }
+    }
+```
+- Note that it’s **“constructor()” and not “function constructor()” and we don’t specify public because constructors can’t be modified with things like pure, view, public, and so forth. Also, constructors cannot return values.**
+- If you wanted the banker to be configured by the person deploying the contract, then you could use it as a function argument.
+- **Calldata cannot be used in constructor arguments.**
+
+--
+
+## require
+
+- **The require statement forces the transaction to revert if some condition is not met.**
+- eg -
+```solidity
+    contract ExampleContract {
+        function mustNotBeFive(
+            uint256 x
+        )
+            public
+            pure
+            returns (uint256) {
+                require(x != 5, "five is not valid");
+                return x * 2;
+        }
+    }
+```
+
+--
+
+## ERC20 tokens
+
+- eg -
+```solidity
+    contract ERC20 {
+        string public name;
+        string public symbol;
+    
+        mapping(address => uint256) public balanceOf;
+        address public owner;
+        uint8 public decimals;
+    
+        uint256 public totalSupply;
+    
+        // owner -> spender -> allowance
+        // this enables an owner to give allowance to multiple addresses
+        mapping(address => mapping(address => uint256))
+            public allowance;
+    
+        constructor(
+            string memory _name,
+            string memory _symbol
+        ) {
+            name = _name;
+            symbol = _symbol;
+            decimals = 18;
+    
+            owner = msg.sender;
+        }
+    
+        function mint(
+            address to,
+            uint256 amount
+        )
+            public {
+                require(msg.sender == owner,
+                    "only owner can create tokens");
+                totalSupply += amount;
+                balanceOf[owner] += amount;
+        }
+    
+        function transfer(
+            address to,
+            uint256 amount
+        )
+            public
+            returns (bool) {
+                return helperTransfer(msg.sender, to, amount);
+        }
+    
+        function approve(
+            address spender,
+            uint256 amount
+        )
+            public
+            returns (bool) {
+                allowance[msg.sender][spender] = amount;
+    
+                return true;
+        }
+    
+        function transferFrom(
+            address from,
+            address to,
+            uint256 amount
+        )
+            public
+            returns (bool) {
+                if (msg.sender != from) {
+                    require(allowance[from][msg.sender] >= amount,
+                        "not enough allowance");
+    
+                    allowance[from][msg.sender] -= amount;
+                }
+    
+                return helperTransfer(from, to, amount);
+        }
+    
+        function helperTransfer(
+            address from,
+            address to,
+            uint256 amount
+        )
+            internal
+            returns (bool) {
+                require(balanceOf[from] >= amount,
+                    "not enough money");
+                require(to != address(0),
+                    "cannot send to address(0)");
+                balanceOf[from] -= amount;
+                balanceOf[to] += amount;
+    
+                return true;
+        }
+    }
+```
+- If you’ve used ERC20 tokens in your wallet, no doubt you’ve seen instances where you have a fraction of the coin. How does that happen when unsigned integers have no decimals?
+- The largest number a uint256 can represent is - 115792089237316195423570985008687907853269984665640564039457584007913129639935
+- Let’s reduce the number a bit to make it more clear - 10000000000000000000000000000000000000000000000000000000000000000000000000000
+- To be able to describe “decimals”, we say the 18 zeros to the right are the fractional part of the coin - 10000000000000000000000000000000000000000000000000000000000.000000000000000000
+- Thus, if our ERC20 has 18 decimals, we can have at most - 10000000000000000000000000000000000000000000000000000000000 full coins, with the zeros to the right being decimals.
+- 10 octodecillion should be enough for most applications, even countries that go into hyperinflation.
+- The “units” of the currency are still integers, but the units are now very small values.
+- **18 decimal places is pretty standard, but some coins use 6 decimal places.**
+- **The decimal of the coin should not change, it’s just a function that returns how many decimals the coin has.**
+
+--
+
+## tuples
+
+- It’s an array of fixed size, but the types inside of it can be a mixture.
+- Note that tuples are implied. The keyword “tuple” never appears in Solidity.
+- Tuples can also be “unpacked” to get the variables inside.
+- eg -
+```solidity
+    contract ExampleContract {
+    
+        function getTopLeaderboardScore()
+            public 
+            pure 
+            returns (address, uint256) {
+                return (
+                    0xd8da6bf26964af9d7eed9e03e53415d37aa96045, 
+                    100
+                );
+        }
+    
+        function highestScoreIsOver9000()
+            public 
+            pure 
+            returns (bool) {
+                (address leader, uint256 score) = 
+                    getTopLeaderboardScore();
+    
+                if (score > 9000) {
+                    return true;
+                }
+            
+                return false;  
+        }
+    }
+```
+
+## ABI
+
+- When you call a function in a smart contract, you aren’t actually doing a “function call” per se, you are sending data to the contract with some information about which function should be executed.
+- Function calls only happen inside the same execution context. Describing transactions as functions, however, is convenient. But we need to look behind the curtain to see exactly what is happening to really understand Solidity.
+- When you “call a smart contract” you are sending data to the contract with instructions for how to execute.
+There are many data encodings, JSON, XML, protobuf, etc. Solidity and Ethereum use the ABI encoding.
+But what you need to know is that it always looks like a sequence of bytes.
+Functions are identified as a sequence of four bytes. Our original byte sequence (0x92d62db5) had four bytes in it: 92, d6, 2d, b5.
+- eg -
+```solidity
+    contract ExampleContract {
+    
+        function encodingXY(uint x, uint256 y)
+            public
+            pure
+            returns (bytes memory) {
+                return abi.encode(x,y);
+        }
+    
+        function getATuple(bytes memory encoding)
+            public
+            pure
+            returns (uint256, uint256) {
+                (uint256 x, uint256 y) = abi.decode(encoding,
+                    (uint256, uint256));
+                return(x,y);
+        }
+    }
+//    Also
+    contract ExampleContract {
+    
+        function getEncoding(uint x)
+        public
+        pure
+        returns (bytes memory) {
+            return abi.encodeWithSignature("takeOneArg()", x);
+        }
+    
+        function takeOneArg(uint256 x)
+        public
+        pure
+        returns (bytes memory) {
+            return msg.data;
+        }
+    }
+```
+
+--
+
+## Calling other contracts
+
+- **View functions are read only.** When you call the function of an arbitrary smart contract, you can’t know if it is read-only or not. Therefore, **solidity doesn’t let you specify a function as view if it calls another smart contract.**
+- **Functions always return abi encoded bytes.** How does remix know to format strings as strings and numbers as numbers? Behind the scenes, it is doing the abi.decode operation that we are doing here.
+- eg - 
+```solidity
+contract ExampleContract {
+    function askTheMeaningOfLife(address source)
+        public 
+        returns (uint256) {
+            (bool ok, bytes memory result) = source.call(
+                abi.encodeWithSignature("meaningOfLifeAndAllExistence()")
+            );
+            require(ok, "call failed");
+
+            return abi.decode(result, (uint256));
+    }
+}
+
+contract AnotherContract {
+    function meaningOfLifeAndAllExistence()
+        public 
+        pure 
+        returns (uint256) {
+            return 42;
+    }
+}
+```
+
+- eg -
+```solidity
+contract ExampleContract {
+    function callAdd(address source, uint256 x, uint256 y)
+        public 
+        returns (uint256) {
+            (bool ok, bytes memory result) = source.call(
+                abi.encodeWithSignature("add(uint256,uint256)", x, y)
+            );
+            require(ok, "call failed");
+
+            uint256 sum = abi.decode(result, (uint256));
+            return sum;
+    }
+}
+
+contract Calc {
+    function add(uint256 x, uint256 y)
+        public 
+        returns (uint256) {
+            return x + y;
+    }
+}
+```
+
+- Be careful to not have spaces in “add(uint256,uint256)”
+
+## Token Exchange Mini Project
+
+- eg-
+```solidity
+// SPDX-License-Identifier: GPL-3.0
+
+pragma solidity >=0.8.0 <0.9.0;
+
+contract SkillCoin {
+    mapping(address => uint256) public balance;
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    function mint(uint256 amount) public {
+        require(msg.sender != address(0));
+        require(amount > 0);
+
+        balance[msg.sender] += amount;
+    }
+
+    function approve(address provideAllowance, uint256 amount) public {
+        require(msg.sender != address(0) && balance[msg.sender] > 0 && provideAllowance != address(0));
+        allowance[msg.sender][provideAllowance] = amount;
+    }
+
+    function transferFrom(address sender, address receiver, uint256 amount) external returns(uint256) {
+        require(sender != address(0) && receiver != address(0));
+        require(balance[sender] >= amount && allowance[sender][receiver] >= amount);
+
+        balance[sender] -= amount;
+        balance[receiver] += amount;
+        allowance[sender][receiver] -= amount;
+        return amount;
+    }
+
+}
+
+// SPDX-License-Identifier: GPL-3.0
+
+pragma solidity >=0.8.0 <0.9.0;
+
+contract RareCoin {
+    mapping(address => uint256) public balance;
+    address public receiver;
+
+    constructor() {
+        receiver = address(this);
+    }
+
+    function balanceOf() public view returns(uint256) {
+        require(msg.sender != address(0) && balance[msg.sender] > 0);
+
+        return balance[msg.sender];
+    }
+
+    function trade(address skillCoinAddress, uint256 amount) public {
+        require(skillCoinAddress != address(0));
+        address sender = msg.sender;
+        (bool success, bytes memory result) =
+                            skillCoinAddress.call
+                (abi.encodeWithSignature("transferFrom(address,address,uint256)", sender, receiver, amount));
+
+        require(success, "'Trade' - Transaction failed");
+
+        balance[sender] += abi.decode(result, (uint256));
+    }
+}
+```
+
+--
+
