@@ -620,3 +620,326 @@ contract RareCoin {
 
 --
 
+## payable functions
+
+- You can **send Ether in units of Wei, Gwei, Finney, or Ether.**
+- **1 ether = 10^18 Wei.**
+- **Unless functions have the payable modifier, they will revert if they receive Ether.**
+- By the way, solidity provides a very convenient keyword for dealing with all the zeros involved with Ether. Both of these functions do the same thing, but one is more readable.
+- eg -
+```solidity
+function moreThanOneEtherV1()
+    public
+    view
+    returns (bool) {
+        if (msg.sender.balance > 1 ether) {
+            return true;
+        }
+        return false;
+}
+
+function moreThanOneEtherV2()
+    public
+    view
+    returns (bool) {
+        if (msg.sender.balance > 10**18) {
+            return true;
+        }
+        return false;
+}
+```
+- It is also **valid to make a constructor payable, if you want your smart contract to begin life with privilege and a headstart.** But you still need to explicitly send ether at construction time.
+- **Just because a function is payable does not mean that the person calling the function has to send Ether.**
+- You will use the **call function we described earlier, but with an extra “meta argument”.**
+- eg - 
+```solidity
+contract ReceiveEther {
+    function takeMoney()
+        public
+        payable {
+
+    }
+
+    function myBalance()
+        public
+        view
+        returns (uint256) {
+            return address(this).balance;
+    }
+}
+
+contract SendMoney {
+    constructor()
+        payable {
+
+    }
+
+    function sendMoney(address receiveEtherContract)
+        public
+        payable {
+            uint256 amount = myBalance();
+            (bool ok, ) = receiveEtherContract.call{value: amount}(
+                abi.encodeWithSignature("takeMoney()")
+            );
+            require(ok, "transfer failed");
+    }
+
+    function myBalance()
+        public
+        view
+        returns (uint256) {
+            return address(this).balance;
+    }
+}
+```
+- **'call' has a funny looking json-like object between call and the arguments. This is how ether is sent with a call. The “value” key determines the amount sent. This is zero by default.**
+- **Payable functions cannot be view or pure. Changing the Ether balance of a smart contract is a “state change” on the blockchain.**
+
+--
+
+## Block.timestamp and Block.number
+
+- **You get the unix timestamp on the block with the block.timestamp.**
+- The number that comes back is the **number of seconds since January 1, 1970 UTC.**
+- eg - 
+```solidity
+contract WhatTimeIsIt {
+
+    function timestamp()
+        public
+        view
+        returns (uint256) {
+            return block.timestamp;
+    }
+}
+```
+- Ethereum progresses with blocks, and **whichever timestamp you get back is what the validator put into the block when they produced it.**
+
+- **block.number - You can also know what block number you are on with this variable.**
+- **Don’t use block.number to track time, only to enforce ordering of transactions.**
+- eg - 
+```solidity
+contract ExampleContract {
+
+    function whatBlockIsIt()
+        external
+        view
+        returns (uint256) {
+            return block.number;
+    }
+}
+```
+- **The code above will tell you which block the transaction happened on.**
+
+--
+
+## Emitting Events
+
+- **If a function causes a state change, it should be logged.**
+- Events **cannot be seen by other smart contracts.**
+- **An event can have up to 3 indexed types, but there isn’t a strict limit on the number of unindexed parameters.**
+- eg - 
+```solidity
+contract ERC20 {
+    string public name;
+    string public symbol;
+
+    mapping(address => uint256) public balanceOf;
+    address public owner;
+    uint8 public decimals;
+
+    uint256 public totalSupply;
+
+    // owner -> spender -> allowance
+    // this enables an owner to give allowance to multiple addresses
+    mapping(address => mapping(address => uint256)) public allowance;
+
+    event Transfer(
+        address indexed _from,
+        address indexed _to,
+        uint256 _value
+    );
+    event Approval(
+        address indexed _owner,
+        address indexed _spender,
+        uint256 _value
+    );
+
+    constructor(
+        string memory _name,
+        string memory _symbol
+    ) {
+        name = _name;
+        symbol = _symbol;
+        decimals = 18;
+
+        owner = msg.sender;
+    }
+
+    function mint(
+        address to,
+        uint256 amount
+    )
+    public {
+        require(msg.sender == owner, "only owner can create tokens");
+        totalSupply += amount;
+        balanceOf[owner] += amount;
+
+        emit Transfer(address(0), owner, amount);
+    }
+
+    function transfer(
+        address to,
+        uint256 amount
+    )
+    public
+    returns (bool) {
+        return helperTransfer(msg.sender, to, amount);
+    }
+
+    function approve(
+        address spender,
+        uint256 amount
+    )
+    public
+    returns (bool) {
+        allowance[msg.sender][spender] = amount;
+        emit Approval(msg.sender, spender, amount);
+
+        return true;
+    }
+
+    function transferFrom(
+        address from,
+        address to,
+        uint256 amount
+    )
+    public
+    returns (bool) {
+        if (msg.sender != from) {
+            require(
+                allowance[from][msg.sender] >= amount,
+                "not enough allowance"
+            );
+
+            allowance[from][msg.sender] -= amount;
+        }
+
+        return helperTransfer(from, to, amount);
+    }
+
+    function helperTransfer(
+        address from,
+        address to,
+        uint256 amount
+    )
+    internal
+    returns (bool) {
+        require(balanceOf[from] >= amount, "not enough money");
+        require(to != address(0), "cannot send to address(0)");
+        balanceOf[from] -= amount;
+        balanceOf[to] += amount;
+
+        emit Transfer(from, to, amount);
+        return true;
+    }
+}
+```
+
+-- 
+
+## Inheritance
+
+- Solidity behaves like an object oriented language and **allows for inheritance.**
+- eg - 
+```solidity
+contract Parent {
+    function theMeaningOfLife() 
+        public 
+        pure 
+        returns (uint256) {
+            return 42;
+    }
+}
+
+contract Child is Parent {
+
+}
+```
+- **When a “contract” is “another contract”, it inherits all it’s functionality.**
+- Like other object oriented programming languages, **functions can be overridden.**
+- eg - 
+```solidity
+contract Parent {
+    function theMeaningOfLife() 
+        public 
+        pure 
+        virtual 
+        returns (uint256) {
+            return 42;
+    }
+}
+
+contract Child is Parent {
+    function theMeaningOfLife() 
+        public 
+        pure 
+        override 
+        returns (uint256) {
+            return 43;
+    }
+}
+```
+- **When a function overrides, it must match exactly, both in name, arguments, and return type.**
+- Functions that override a parent’s function **must have an override modifier.**
+- Note that **only virtual functions can be overridden. If you try to override a function that isn’t virtual, the code won’t compile.**
+- **Solidity supports multiple inheritance.**
+- There are two ways to **make a function not accessible from the outside world: giving them a private or internal modifier.**
+  - **Private functions (and variables) cannot be “seen” by the child contracts.**
+  - **Internal functions and variables can.**
+- **The super keyword means “call the parent’s function.”**
+- **Solidity won’t let you inherit from a parent contract without initializing it’s constructor.**
+- eg - 
+```solidity
+contract Parent {
+    string private name;
+
+    constructor(string memory _name) {
+        name = _name;
+    }
+
+    function getName() public view virtual returns (string memory) {
+        return name;
+    }
+}
+
+contract Child is Parent {
+
+    // error, name hasn't been set!
+    function getName() public view override returns (string memory) {
+        return super.getName();
+    }
+}
+
+// FIXED
+contract Parent {
+    string private name;
+
+    constructor(string memory _name) {
+        name = _name;
+    }
+
+    function getName() public view virtual returns (string memory) {
+        return name;
+    }
+}
+
+contract Child is Parent {
+
+    // error, name hasn't been set!
+    function getName() public view override returns (string memory) {
+        return super.getName();
+    }
+}
+```
+- **You cannot inherit contract deployed on the blockchain.**
